@@ -11,6 +11,27 @@ import subprocess
 
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 
+def safe_requests_get(url, headers=None, timeout=10, max_retries=3):
+    """Sends a GET request with exponential backoff on 429 and 503 errors."""
+    delay = 2
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(url, headers=headers, timeout=timeout)
+            if response.status_code in [429, 503]:
+                print(f"Server returned {response.status_code} for {url}. Retrying in {delay}s...", file=sys.stderr)
+                time.sleep(delay)
+                delay *= 2
+                continue
+            return response
+        except (requests.exceptions.RequestException, Exception) as e:
+            if attempt < max_retries:
+                print(f"Request failed for {url}: {e}. Retrying in {delay}s...", file=sys.stderr)
+                time.sleep(delay)
+                delay *= 2
+            else:
+                raise e
+    return response
+
 def get_match_filename(href):
     """Generates a clean match filename like eng_vs_ind_3rd_odi(19-07-2026).csv from match URL."""
     slug = href.split('/')[-1]
@@ -36,7 +57,7 @@ def find_international_matches():
     }
     matches = {}
     try:
-        response = requests.get('https://www.cricbuzz.com/cricket-match/live-scores', headers=headers, timeout=10)
+        response = safe_requests_get('https://www.cricbuzz.com/cricket-match/live-scores', headers=headers, timeout=10)
         if response.status_code != 200:
             return {}
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -108,7 +129,7 @@ def fetch_commentary(match_url):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     try:
-        response = requests.get(match_url, headers=headers, timeout=10)
+        response = safe_requests_get(match_url, headers=headers, timeout=10)
         if response.status_code != 200:
             return []
         soup = BeautifulSoup(response.text, 'html.parser')
