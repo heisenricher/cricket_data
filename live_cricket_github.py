@@ -12,7 +12,7 @@ import subprocess
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def get_match_filename(href):
-    """Generates a clean match filename like eng_vs_ind_3rd_odi.csv from match URL."""
+    """Generates a clean match filename like eng_vs_ind_3rd_odi(19-07-2026).csv from match URL."""
     slug = href.split('/')[-1]
     slug_parts = slug.split('-')
     truncated_parts = []
@@ -25,7 +25,9 @@ def get_match_filename(href):
         clean_slug = slug.replace('-', '_')
     else:
         clean_slug = "_".join(truncated_parts)
-    return f"{clean_slug}.csv"
+        
+    date_str = time.strftime("%d-%m-%Y")
+    return f"{clean_slug}({date_str}).csv"
 
 def find_international_matches():
     """Auto-detects active/upcoming International Men's matches on Cricbuzz."""
@@ -180,8 +182,16 @@ def main():
     # Dict to keep track of completed match IDs so we don't query them repeatedly
     completed_matches = {}
     
+    # Read duration limit from environment (0 = infinite)
+    run_duration = int(os.getenv("RUN_DURATION", "0"))
+    start_time = time.time()
+    
     print("Starting Live Cricket GitHub Sync daemon...")
     while True:
+        if run_duration > 0 and (time.time() - start_time) / 60 >= run_duration:
+            print(f"Run duration of {run_duration} minutes reached. Exiting gracefully.")
+            break
+            
         # Wrap entire loop iteration in try-except to ensure the API/sync script never terminates
         try:
             print("\n--- Scanning for International Men's matches on Cricbuzz ---")

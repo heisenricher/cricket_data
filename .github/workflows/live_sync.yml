@@ -1,0 +1,36 @@
+name: Live Cricket Sync
+
+on:
+  schedule:
+    - cron: '*/25 * * * *' # Run every 25 minutes
+  workflow_dispatch:      # Allow manual triggering from GitHub UI
+
+concurrency:
+  group: live-cricket-sync
+  cancel-in-progress: true # Automatically cancels previous run when a new one starts to ensure 24/7 sync with no conflicts
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Dependencies
+        run: |
+          pip install requests beautifulsoup4
+          
+      - name: Run Sync Script
+        env:
+          RUN_DURATION: 30 # Loop for 30 minutes (5 minutes overlap before the next run takes over)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python live_cricket_github.py
