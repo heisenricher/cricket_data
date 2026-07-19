@@ -5,6 +5,8 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import csv
+import re
+import hashlib
 import subprocess
 
 REPO_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -52,7 +54,7 @@ def find_international_matches():
                     if not match_name:
                         match_name = slug.replace('-', ' ').title()
                     
-                    is_completed = any(x in match_name.lower() for x in ["won by", "won", "tied", "drawn", "abandoned", "no result", "ends in a draw", "won"])
+                    is_completed = any(x in match_name.lower() for x in ["won by", "won", "tied", "drawn", "abandoned", "no result", "ends in a draw"])
                     
                     matches[match_id] = {
                         'id': match_id,
@@ -65,6 +67,39 @@ def find_international_matches():
         print(f"Error auto-detecting matches: {e}", file=sys.stderr)
     return matches
 
+def fetch_commentary_html_fallback(soup):
+    """Fallback method: parses raw HTML commentary divs if JSON state is not present."""
+    balls = []
+    print("Using HTML parsing fallback method...")
+    # Cricbuzz commentary lines usually have a pattern: '16.2 Bowler to Batsman, description'
+    for div in soup.find_all('div'):
+        text = div.text.strip()
+        if not text:
+            continue
+        # Match text starting with over e.g., '16.2'
+        match = re.match(r'^(\d+\.\d+)\s*(.*?)$', text)
+        if match:
+            over_num = match.group(1)
+            rest = match.group(2).strip()
+            if " to " in rest and "," in rest:
+                comm_text = rest
+                parts = rest.split(" to ", 1)
+                bowler = parts[0].strip()
+                subparts = parts[1].split(",", 1)
+                batsman = subparts[0].strip()
+                # Generate unique ID based on hash of over + commentary to avoid duplicates
+                comm_id = hashlib.md5(f"{over_num}_{comm_text}".encode('utf-8')).hexdigest()
+                balls.append({
+                    'id': comm_id,
+                    'ball': over_num,
+                    'innings': '1', # default fallback innings
+                    'team': '',
+                    'batsman': batsman,
+                    'bowler': bowler,
+                    'commentary': over_num + " " + comm_text
+                })
+    return balls
+
 def fetch_commentary(match_url):
     """Fetches and parses commentary from a Cricbuzz match URL."""
     headers = {
@@ -75,48 +110,53 @@ def fetch_commentary(match_url):
         if response.status_code != 200:
             return []
         soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Try Next.js JSON state parsing first (highly accurate)
         script_content = ""
         for script in soup.find_all('script'):
             content = script.string or ''
             if "matchCommentary" in content:
                 script_content += content
-        if not script_content:
-            return []
-        clean_content = script_content.replace('\\"', '"').replace('\\\\', '\\')
-        target = '"matchCommentary":'
-        idx = clean_content.find(target)
-        if idx == -1:
-            return []
-        start_idx = idx + len(target)
-        brace_count = 0
-        end_idx = start_idx
-        for i in range(start_idx, len(clean_content)):
-            char = clean_content[i]
-            if char == '{':
-                brace_count += 1
-            elif char == '}':
-                brace_count -= 1
-                if brace_count == 0:
-                    end_idx = i + 1
-                    break
-        json_str = clean_content[start_idx:end_idx]
-        commentary_dict = json.loads(json_str)
-        balls = []
-        for comm_id, item in commentary_dict.items():
-            if item.get('commType') == 'commentary':
-                balls.append({
-                    'id': str(comm_id),
-                    'ball': item.get('ballMetric'),
-                    'innings': item.get('inningsId'),
-                    'team': item.get('teamName'),
-                    'batsman': item.get('batsmanDetails', {}).get('playerName', ''),
-                    'bowler': item.get('bowlerDetails', {}).get('playerName', ''),
-                    'commentary': item.get('commText', '')
-                })
-        balls.sort(key=lambda x: int(x['id']))
-        return balls
+                
+        if script_content:
+            clean_content = script_content.replace('\\"', '"').replace('\\\\', '\\')
+            target = '"matchCommentary":'
+            idx = clean_content.find(target)
+            if idx != -1:
+                start_idx = idx + len(target)
+                brace_count = 0
+                end_idx = start_idx
+                for i in range(start_idx, len(clean_content)):
+                    char = clean_content[i]
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            end_idx = i + 1
+                            break
+                json_str = clean_content[start_idx:end_idx]
+                commentary_dict = json.loads(json_str)
+                balls = []
+                for comm_id, item in commentary_dict.items():
+                    if item.get('commType') == 'commentary':
+                        balls.append({
+                            'id': str(comm_id),
+                            'ball': item.get('ballMetric'),
+                            'innings': item.get('inningsId'),
+                            'team': item.get('teamName'),
+                            'batsman': item.get('batsmanDetails', {}).get('playerName', ''),
+                            'bowler': item.get('bowlerDetails', {}).get('playerName', ''),
+                            'commentary': item.get('commText', '')
+                        })
+                balls.sort(key=lambda x: int(x['id']))
+                if balls:
+                    return balls
+        
+        # Fallback if JSON state was not found or was empty
+        return fetch_commentary_html_fallback(soup)
     except Exception as e:
-        print(f"Error parsing commentary JSON for {match_url}: {e}", file=sys.stderr)
+        print(f"Error parsing commentary for {match_url}: {e}", file=sys.stderr)
         return []
 
 def git_commit_and_push(changed_files):
@@ -140,72 +180,77 @@ def main():
     # Dict to keep track of completed match IDs so we don't query them repeatedly
     completed_matches = {}
     
+    print("Starting Live Cricket GitHub Sync daemon...")
     while True:
-        print("\n--- Scanning for International Men's matches on Cricbuzz ---")
-        live_matches = find_international_matches()
-        print(f"Found {len(live_matches)} matches in scope.")
-        
-        changed_files = []
-        
-        for m_id, m in live_matches.items():
-            # If this match was previously marked completed and we already processed it, skip
-            if m_id in completed_matches:
-                continue
-                
-            csv_path = os.path.join(REPO_DIR, m['filename'])
-            existing_ids = set()
+        # Wrap entire loop iteration in try-except to ensure the API/sync script never terminates
+        try:
+            print("\n--- Scanning for International Men's matches on Cricbuzz ---")
+            live_matches = find_international_matches()
+            print(f"Found {len(live_matches)} matches in scope.")
             
-            # Read existing IDs if file exists
-            if os.path.exists(csv_path):
-                try:
-                    with open(csv_path, "r", newline="", encoding="utf-8") as f:
-                        reader = csv.reader(f)
-                        rows = list(reader)
-                        if rows and len(rows) > 0:
-                            existing_ids = set(row[0] for row in rows[1:] if row)
-                except Exception as e:
-                    print(f"Error reading existing CSV {m['filename']}: {e}", file=sys.stderr)
-                    
-            # Write headers if file is new
-            if not os.path.exists(csv_path):
-                with open(csv_path, "w", newline="", encoding="utf-8") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(headers)
-                    
-            print(f"Fetching commentary for: {m['name']} ({m['filename']})")
-            balls = fetch_commentary(m['url'])
+            changed_files = []
             
-            new_balls = []
-            for ball in balls:
-                if ball['id'] not in existing_ids:
-                    new_balls.append(ball)
-                    existing_ids.add(ball['id'])
+            for m_id, m in live_matches.items():
+                if m_id in completed_matches:
+                    continue
                     
-            if new_balls:
-                print(f"Writing {len(new_balls)} new entries to {m['filename']}...")
-                with open(csv_path, "a", newline="", encoding="utf-8") as f:
-                    writer = csv.writer(f)
-                    for ball in new_balls:
-                        writer.writerow([
-                            ball['id'],
-                            str(ball['ball']),
-                            str(ball['innings']),
-                            ball['team'],
-                            ball['batsman'],
-                            ball['bowler'],
-                            ball['commentary']
-                        ])
-                if m['filename'] not in changed_files:
-                    changed_files.append(m['filename'])
-                    
-            if m['completed']:
-                print(f"Match {m['name']} has ended. Marking as completed.")
-                completed_matches[m_id] = True
+                csv_path = os.path.join(REPO_DIR, m['filename'])
+                existing_ids = set()
                 
-        if changed_files:
-            git_commit_and_push(changed_files)
-        else:
-            print("No new ball-by-ball entries found across all matches.")
+                # Read existing IDs if file exists
+                if os.path.exists(csv_path):
+                    try:
+                        with open(csv_path, "r", newline="", encoding="utf-8") as f:
+                            reader = csv.reader(f)
+                            rows = list(reader)
+                            if rows and len(rows) > 0:
+                                existing_ids = set(row[0] for row in rows[1:] if row)
+                    except Exception as e:
+                        print(f"Error reading existing CSV {m['filename']}: {e}", file=sys.stderr)
+                        
+                # Write headers if file is new
+                if not os.path.exists(csv_path):
+                    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        writer.writerow(headers)
+                        
+                print(f"Fetching commentary for: {m['name']} ({m['filename']})")
+                balls = fetch_commentary(m['url'])
+                
+                new_balls = []
+                for ball in balls:
+                    if ball['id'] not in existing_ids:
+                        new_balls.append(ball)
+                        existing_ids.add(ball['id'])
+                        
+                if new_balls:
+                    print(f"Writing {len(new_balls)} new entries to {m['filename']}...")
+                    with open(csv_path, "a", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        for ball in new_balls:
+                            writer.writerow([
+                                ball['id'],
+                                str(ball['ball']),
+                                str(ball['innings']),
+                                ball['team'],
+                                ball['batsman'],
+                                ball['bowler'],
+                                ball['commentary']
+                            ])
+                    if m['filename'] not in changed_files:
+                        changed_files.append(m['filename'])
+                        
+                if m['completed']:
+                    print(f"Match {m['name']} has ended. Marking as completed.")
+                    completed_matches[m_id] = True
+                    
+            if changed_files:
+                git_commit_and_push(changed_files)
+            else:
+                print("No new ball-by-ball entries found across all matches.")
+                
+        except Exception as main_loop_error:
+            print(f"[FATAL LOOP ERROR] {main_loop_error}. Restarting cycle in 1 minute...", file=sys.stderr)
             
         print("Waiting 1 minute before next refresh...")
         time.sleep(60)
