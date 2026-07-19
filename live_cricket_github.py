@@ -191,6 +191,7 @@ def git_commit_and_push(changed_files):
         status = subprocess.run(["git", "status", "--porcelain"], cwd=REPO_DIR, capture_output=True, text=True)
         if status.stdout.strip():
             subprocess.run(["git", "commit", "-m", "Update live cricket commentary data"], cwd=REPO_DIR, check=True)
+            subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=REPO_DIR, check=True)
             subprocess.run(["git", "push", "origin", "main"], cwd=REPO_DIR, check=True)
             print("Successfully committed and pushed updates to GitHub.")
         else:
