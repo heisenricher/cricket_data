@@ -1,0 +1,25 @@
+name: Test Google Scraper
+
+on:
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Dependencies
+        run: |
+          pip install playwright
+          python -m playwright install chromium
+          
+      - name: Run Scraper Test
+        run: |
+          python test_google_playwright.py
