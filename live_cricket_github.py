@@ -177,6 +177,73 @@ def git_commit_and_push(changed_files):
     except Exception as e:
         print(f"Git operation failed: {e}", file=sys.stderr)
 
+def cleanup_match_csv(csv_path):
+    """Cleans up the match CSV after the match ends:
+    - Removes the 'Ball ID' column.
+    - Removes non-ball rows (e.g. over summaries, drinks, general commentary).
+    - Sorts rows chronologically by Innings and Over/Ball.
+    - Saves the cleaned CSV.
+    """
+    if not os.path.exists(csv_path):
+        return
+        
+    print(f"Starting post-match cleanup for: {csv_path}")
+    headers = ["Over/Ball", "Innings", "Team", "Batsman", "Bowler", "Commentary"]
+    cleaned_rows = []
+    
+    try:
+        with open(csv_path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+            if not rows or len(rows) <= 1:
+                return
+                
+            orig_headers = rows[0]
+            try:
+                over_idx = orig_headers.index("Over/Ball")
+                innings_idx = orig_headers.index("Innings")
+                team_idx = orig_headers.index("Team")
+                batsman_idx = orig_headers.index("Batsman")
+                bowler_idx = orig_headers.index("Bowler")
+                comm_idx = orig_headers.index("Commentary")
+            except ValueError:
+                # Already cleaned or headers mismatch
+                print("CSV already cleaned or headers mismatch.")
+                return
+                
+            for row in rows[1:]:
+                if not row or len(row) <= max(over_idx, comm_idx):
+                    continue
+                over_val = row[over_idx].strip()
+                # Check if it's a valid ball count row (must be in format X.Y e.g. 16.5)
+                if re.match(r'^\d+\.\d+$', over_val):
+                    cleaned_rows.append({
+                        'over': float(over_val),
+                        'innings': int(row[innings_idx]) if row[innings_idx].isdigit() else 1,
+                        'row_data': [
+                            row[over_idx],
+                            row[innings_idx],
+                            row[team_idx],
+                            row[batsman_idx],
+                            row[bowler_idx],
+                            row[comm_idx]
+                        ]
+                    })
+                    
+        if cleaned_rows:
+            # Sort chronologically: Innings first, then Over/Ball
+            cleaned_rows.sort(key=lambda x: (x['innings'], x['over']))
+            
+            # Write back the cleaned data
+            with open(csv_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                for row in cleaned_rows:
+                    writer.writerow(row['row_data'])
+            print(f"Successfully cleaned and formatted {csv_path}. Kept {len(cleaned_rows)} ball entries.")
+    except Exception as e:
+        print(f"Error during CSV cleanup: {e}", file=sys.stderr)
+
 def main():
     headers = ["Ball ID", "Over/Ball", "Innings", "Team", "Batsman", "Bowler", "Commentary"]
     # Dict to keep track of completed match IDs so we don't query them repeatedly
@@ -251,8 +318,11 @@ def main():
                         changed_files.append(m['filename'])
                         
                 if m['completed']:
-                    print(f"Match {m['name']} has ended. Marking as completed.")
+                    print(f"Match {m['name']} has ended. Marking as completed and running post-match cleanup...")
                     completed_matches[m_id] = True
+                    cleanup_match_csv(csv_path)
+                    if m['filename'] not in changed_files:
+                        changed_files.append(m['filename'])
                     
             if changed_files:
                 git_commit_and_push(changed_files)
