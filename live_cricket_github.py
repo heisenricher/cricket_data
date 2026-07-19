@@ -198,59 +198,187 @@ def git_commit_and_push(changed_files):
     except Exception as e:
         print(f"Git operation failed: {e}", file=sys.stderr)
 
-def cleanup_match_csv(csv_path):
+def backfill_match_commentary(match_id, match_url):
+    """Backfills any missing commentary by paginating back to the first ball of the match."""
+    print(f"Running full backfill for match {match_id}...")
+    all_balls = {}
+    
+    # 1. Fetch current commentary page to start
+    current_balls = fetch_commentary(match_url)
+    for b in current_balls:
+        all_balls[b['id']] = b
+        
+    if not current_balls:
+        return []
+        
+    # 2. Paginate back using the oldest ball's ID (which is a timestamp in ms)
+    try:
+        oldest_id = min(current_balls, key=lambda x: int(x['id']))['id']
+    except Exception:
+        return current_balls
+        
+    seen_timestamps = {oldest_id}
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    max_pages = 50  # Prevent infinite loops in case of layout changes
+    for page_num in range(max_pages):
+        pagination_url = f"https://www.cricbuzz.com/api/cricket-match/commentary/{match_id}/{oldest_id}"
+        print(f"Fetching historical page {page_num + 1} with timestamp {oldest_id}...")
+        
+        try:
+            response = safe_requests_get(pagination_url, headers=headers, timeout=10)
+            if response.status_code != 200:
+                break
+                
+            soup = BeautifulSoup(response.text, 'html.parser')
+            page_balls = []
+            
+            # Parse Next.js JSON state
+            script_content = ""
+            for script in soup.find_all('script'):
+                content = script.string or ''
+                if "matchCommentary" in content:
+                    script_content += content
+                    
+            if script_content:
+                clean_content = script_content.replace('\\"', '"').replace('\\\\', '\\')
+                target = '"matchCommentary":'
+                idx = clean_content.find(target)
+                if idx != -1:
+                    start_idx = idx + len(target)
+                    brace_count = 0
+                    end_idx = start_idx
+                    for i in range(start_idx, len(clean_content)):
+                        char = clean_content[i]
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                end_idx = i + 1
+                                break
+                    json_str = clean_content[start_idx:end_idx]
+                    commentary_dict = json.loads(json_str)
+                    
+                    for comm_id, item in commentary_dict.items():
+                        if item.get('commType') == 'commentary':
+                            page_balls.append({
+                                'id': str(comm_id),
+                                'ball': item.get('ballMetric'),
+                                'innings': item.get('inningsId'),
+                                'team': item.get('teamName'),
+                                'batsman': item.get('batsmanDetails', {}).get('playerName', ''),
+                                'bowler': item.get('bowlerDetails', {}).get('playerName', ''),
+                                'commentary': item.get('commText', '')
+                            })
+                            
+            if not page_balls:
+                page_balls = fetch_commentary_html_fallback(soup)
+                
+            if not page_balls:
+                print("No more historical commentary found on this page.")
+                break
+                
+            # Filter new balls
+            new_added = 0
+            for b in page_balls:
+                if b['id'] not in all_balls:
+                    all_balls[b['id']] = b
+                    new_added += 1
+                    
+            if new_added == 0:
+                print("No new commentary items found in this page.")
+                break
+                
+            # Find new oldest timestamp
+            oldest_id = min(page_balls, key=lambda x: int(x['id']))['id']
+            if oldest_id in seen_timestamps:
+                print("Oldest ID repeating, stopping backfill.")
+                break
+            seen_timestamps.add(oldest_id)
+            
+        except Exception as e:
+            print(f"Error during backfill page fetch: {e}", file=sys.stderr)
+            break
+            
+    return list(all_balls.values())
+
+def cleanup_match_csv(csv_path, match_id, match_url):
     """Cleans up the match CSV after the match ends:
+    - Backfills all match commentary from the start of the match.
     - Removes the 'Ball ID' column.
     - Removes non-ball rows (e.g. over summaries, drinks, general commentary).
     - Sorts rows chronologically by Innings and Over/Ball.
     - Saves the cleaned CSV.
     """
-    if not os.path.exists(csv_path):
-        return
-        
-    print(f"Starting post-match cleanup for: {csv_path}")
+    print(f"Starting post-match cleanup and backfill for: {csv_path}")
     headers = ["Over/Ball", "Innings", "Team", "Batsman", "Bowler", "Commentary"]
     cleaned_rows = []
     
+    # 1. Backfill all commentary from the web
+    backfilled_balls = backfill_match_commentary(match_id, match_url)
+    
+    # 2. Read existing CSV rows and build list of all known balls
+    existing_balls = {}
+    if os.path.exists(csv_path):
+        try:
+            with open(csv_path, "r", newline="", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                if rows and len(rows) > 1:
+                    orig_headers = rows[0]
+                    # Check if CSV still has Ball ID (means it hasn't been cleaned yet)
+                    if "Ball ID" in orig_headers:
+                        id_idx = orig_headers.index("Ball ID")
+                        over_idx = orig_headers.index("Over/Ball")
+                        innings_idx = orig_headers.index("Innings")
+                        team_idx = orig_headers.index("Team")
+                        batsman_idx = orig_headers.index("Batsman")
+                        bowler_idx = orig_headers.index("Bowler")
+                        comm_idx = orig_headers.index("Commentary")
+                        
+                        for row in rows[1:]:
+                            if row and len(row) > max(id_idx, comm_idx):
+                                existing_balls[row[id_idx]] = {
+                                    'id': row[id_idx],
+                                    'ball': row[over_idx],
+                                    'innings': row[innings_idx],
+                                    'team': row[team_idx],
+                                    'batsman': row[batsman_idx],
+                                    'bowler': row[bowler_idx],
+                                    'commentary': row[comm_idx]
+                                }
+        except Exception as e:
+            print(f"Error reading existing CSV: {e}", file=sys.stderr)
+            
+    # 3. Merge backfilled balls with existing balls (deduplicating by Ball ID)
+    merged_balls = list(existing_balls.values())
+    seen_ids = set(existing_balls.keys())
+    for b in backfilled_balls:
+        if b['id'] not in seen_ids:
+            merged_balls.append(b)
+            seen_ids.add(b['id'])
+            
+    # 4. Filter and process valid ball count rows
+    for b in merged_balls:
+        over_val = str(b['ball']).strip()
+        if re.match(r'^\d+\.\d+$', over_val):
+            cleaned_rows.append({
+                'over': float(over_val),
+                'innings': int(b['innings']) if str(b['innings']).isdigit() else 1,
+                'row_data': [
+                    b['ball'],
+                    b['innings'],
+                    b['team'],
+                    b['batsman'],
+                    b['bowler'],
+                    b['commentary']
+                ]
+            })
+            
     try:
-        with open(csv_path, "r", newline="", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-            if not rows or len(rows) <= 1:
-                return
-                
-            orig_headers = rows[0]
-            try:
-                over_idx = orig_headers.index("Over/Ball")
-                innings_idx = orig_headers.index("Innings")
-                team_idx = orig_headers.index("Team")
-                batsman_idx = orig_headers.index("Batsman")
-                bowler_idx = orig_headers.index("Bowler")
-                comm_idx = orig_headers.index("Commentary")
-            except ValueError:
-                # Already cleaned or headers mismatch
-                print("CSV already cleaned or headers mismatch.")
-                return
-                
-            for row in rows[1:]:
-                if not row or len(row) <= max(over_idx, comm_idx):
-                    continue
-                over_val = row[over_idx].strip()
-                # Check if it's a valid ball count row (must be in format X.Y e.g. 16.5)
-                if re.match(r'^\d+\.\d+$', over_val):
-                    cleaned_rows.append({
-                        'over': float(over_val),
-                        'innings': int(row[innings_idx]) if row[innings_idx].isdigit() else 1,
-                        'row_data': [
-                            row[over_idx],
-                            row[innings_idx],
-                            row[team_idx],
-                            row[batsman_idx],
-                            row[bowler_idx],
-                            row[comm_idx]
-                        ]
-                    })
-                    
         if cleaned_rows:
             # Sort chronologically: Innings first, then Over/Ball
             cleaned_rows.sort(key=lambda x: (x['innings'], x['over']))
@@ -261,9 +389,9 @@ def cleanup_match_csv(csv_path):
                 writer.writerow(headers)
                 for row in cleaned_rows:
                     writer.writerow(row['row_data'])
-            print(f"Successfully cleaned and formatted {csv_path}. Kept {len(cleaned_rows)} ball entries.")
+            print(f"Successfully cleaned, backfilled, and formatted {csv_path}. Saved {len(cleaned_rows)} ball entries.")
     except Exception as e:
-        print(f"Error during CSV cleanup: {e}", file=sys.stderr)
+        print(f"Error saving cleaned CSV: {e}", file=sys.stderr)
 
 def main():
     headers = ["Ball ID", "Over/Ball", "Innings", "Team", "Batsman", "Bowler", "Commentary"]
@@ -341,7 +469,7 @@ def main():
                 if m['completed']:
                     print(f"Match {m['name']} has ended. Marking as completed and running post-match cleanup...")
                     completed_matches[m_id] = True
-                    cleanup_match_csv(csv_path)
+                    cleanup_match_csv(csv_path, m_id, m['url'])
                     if m['filename'] not in changed_files:
                         changed_files.append(m['filename'])
                     
