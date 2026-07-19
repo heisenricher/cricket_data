@@ -9,6 +9,9 @@ concurrency:
   group: live-cricket-sync
   cancel-in-progress: true # Automatically cancels previous run when a new one starts to ensure 24/7 sync with no conflicts
 
+permissions:
+  contents: write
+
 jobs:
   sync:
     runs-on: ubuntu-latest
