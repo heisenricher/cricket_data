@@ -330,10 +330,10 @@ def main():
                 print("No new ball-by-ball entries found across all matches.")
                 
         except Exception as main_loop_error:
-            print(f"[FATAL LOOP ERROR] {main_loop_error}. Restarting cycle in 1 minute...", file=sys.stderr)
+            print(f"[FATAL LOOP ERROR] {main_loop_error}. Restarting cycle in 30 seconds...", file=sys.stderr)
             
-        print("Waiting 1 minute before next refresh...")
-        time.sleep(60)
+        print("Waiting 30 seconds before next refresh...")
+        time.sleep(30)
 
 if __name__ == "__main__":
     main()
