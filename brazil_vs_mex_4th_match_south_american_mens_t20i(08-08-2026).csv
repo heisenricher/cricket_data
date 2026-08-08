@@ -6,3 +6,11 @@ Ball ID,Over/Ball,Innings,Team,Batsman,Bowler,Commentary
 1786205436385,$undefined,$undefined,,,,"<b>Brazil</b> (Playing XI): William Maximo, Luiz Morais, Chrystian Machado, Michel Assuncao(c), Yasar Haroon, Luiz Gabriel Moras, MD Rejaul Karim, Lucas Maximo(w), Gabriel Otavio, Riquelmi Nascimento, Miguel Silva"
 1786205584418,$undefined,$undefined,,,,"<b>Mexico</b> (Playing XI): Jayanth Byrappa, Shashikant Laxman Hirugade, Sai Tallapragada(w), Bhargav Narasimha, Pratik Singh Bais(c), Dhananjaya Panda, Gutierrez Chavez, Matt Noble, Mohit Sharma, Waseem Tabrez, Yashvanth Jasti"
 1786205603488,$undefined,$undefined,,,,<b>Teams:</b>
+1786206197914,$undefined,1,BRAZIL,,,<b>William Maximo and Luiz Morais are at the crease. William Maximo is on strike. Pratik Singh will open the attack</b>
+1786206200757,0.1,1,BRAZIL,William Maximo,Pratik Singh Bais,"Pratik Singh to William Maximo, no run"
+1786206201076,0.2,1,BRAZIL,William Maximo,Pratik Singh Bais,"Pratik Singh to William Maximo, no run"
+1786206203230,0.3,1,BRAZIL,William Maximo,Pratik Singh Bais,"Pratik Singh to William Maximo, 1 run"
+1786206204644,0.4,1,BRAZIL,Luiz Morais,Pratik Singh Bais,"Pratik Singh to Luiz Morais, 2 runs"
+1786206206328,0.5,1,BRAZIL,Luiz Morais,Pratik Singh Bais,"Pratik Singh to Luiz Morais, no run"
+1786206207424,0.6,1,BRAZIL,Luiz Morais,Pratik Singh Bais,"Pratik Singh to Luiz Morais, 1 run"
+1786206212928,$undefined,1,BRAZIL,Luiz Morais,Yashvanth Jasti,"<b>Yashvanth Jasti, comes into the attack</b>"
