@@ -6,3 +6,11 @@ Ball ID,Over/Ball,Innings,Team,Batsman,Bowler,Commentary
 1786318268758,$undefined,$undefined,,,,"<b>Brazil</b> (Playing XI): William Maximo, Luiz Morais, Chrystian Machado, Michel Assuncao(c), Yasar Haroon, Lucas Maximo(w), MD Rejaul Karim, Luiz Goncalves, Gabriel Otavio, Luiz Gabriel Moras, Riquelmi Nascimento"
 1786318326182,$undefined,$undefined,,,,"<b>Panama</b> (Playing XI): Salim Guzman(w), Mahmed Bawa, Yusuf Bhoola, Irfan Hafejee, Lalu Bhai Ahir, Sufyan Tarajia, Kalpesh Ahir, Abdul Makda(c), Akash Ahir, Ahmed Bangali, Muhammad Sarkar"
 1786318327252,$undefined,$undefined,,,,<b>Teams:</b>
+1786318463618,$undefined,1,BRAZIL,,,<b>William Maximo and Luiz Morais are at the crease. William Maximo is on strike. Lalu Bhai Ahir will open the attack</b>
+1786318470533,0.1,1,BRAZIL,William Maximo,Lalu Bhai Ahir,"Lalu Bhai Ahir to William Maximo, leg byes, 1 run"
+1786318475144,0.2,1,BRAZIL,Luiz Morais,Lalu Bhai Ahir,"Lalu Bhai Ahir to Luiz Morais, <b>wide</b>"
+1786318477681,0.2,1,BRAZIL,Luiz Morais,Lalu Bhai Ahir,"Lalu Bhai Ahir to Luiz Morais, no run"
+1786318480471,0.3,1,BRAZIL,Luiz Morais,Lalu Bhai Ahir,"Lalu Bhai Ahir to Luiz Morais, 1 run"
+1786318482338,0.4,1,BRAZIL,William Maximo,Lalu Bhai Ahir,"Lalu Bhai Ahir to William Maximo, no run"
+1786318482652,0.5,1,BRAZIL,William Maximo,Lalu Bhai Ahir,"Lalu Bhai Ahir to William Maximo, no run"
+1786318485038,0.6,1,BRAZIL,William Maximo,Lalu Bhai Ahir,"Lalu Bhai Ahir to William Maximo, <b>FOUR</b>"
