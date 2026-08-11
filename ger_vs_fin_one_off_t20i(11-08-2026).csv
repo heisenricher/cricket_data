@@ -6,3 +6,11 @@ Ball ID,Over/Ball,Innings,Team,Batsman,Bowler,Commentary
 1786465642594,$undefined,$undefined,,,,"<b>Finland</b> (Playing XI): Amjad Sher(c), Aniketh Pusthay, Aravind Mohan(w), Faheem Nellancheri, Hammadullah Shinwari, Junaid Khan, Mahesh Tambe, Faraaz Mehti Abbas, Nicholas Salonen, Piumal Karunarathna, Zahidullah Kamal"
 1786466271512,$undefined,$undefined,,,,"<b>Germany</b> (Playing XI): Ben Kohler-Cadmore, Musaddiq Ahmed(c), Harmanjot Singh, Shahid Afridi, Hamid Wardak, Fayaz Khan Nasseri, Sachin Mandy Gangareddy(w), Muslim Yar Ashraf, Sajid Liaqat, Jatinder Kumar, Prateek Dabholkar"
 1786466272611,$undefined,$undefined,,,,<b>Teams:</b>
+1786466453858,$undefined,1,GER,,,<b>Ben Kohler-Cadmore and Musaddiq Ahmed are at the crease. Ben Kohler-Cadmore is on strike. Amjad Sher will open the attack</b>
+1786466458044,0.1,1,GER,Ben Kohler-Cadmore,Amjad Sher,"Amjad Sher to Ben Kohler-Cadmore, 2 runs"
+1786466459162,0.2,1,GER,Ben Kohler-Cadmore,Amjad Sher,"Amjad Sher to Ben Kohler-Cadmore, 1 run"
+1786466462613,0.3,1,GER,Musaddiq Ahmed,Amjad Sher,"Amjad Sher to Musaddiq Ahmed, no run"
+1786466465835,0.4,1,GER,Musaddiq Ahmed,Amjad Sher,"Amjad Sher to Musaddiq Ahmed, <b>SIX</b>"
+1786466467200,0.5,1,GER,Musaddiq Ahmed,Amjad Sher,"Amjad Sher to Musaddiq Ahmed, no run"
+1786466467452,0.6,1,GER,Musaddiq Ahmed,Amjad Sher,"Amjad Sher to Musaddiq Ahmed, no run"
+1786466476030,$undefined,1,GER,Ben Kohler-Cadmore,Hammadullah Shinwari,"<b>Hammadullah Shinwari, comes into the attack</b>"
